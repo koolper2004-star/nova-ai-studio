@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090b12">
+<title>Nova AI Studio</title>
+<style>
+:root{--bg:#090b12;--card:#111522;--line:#242a3b;--text:#f5f7ff;--muted:#929ab0;--accent:#8b5cf6;--accent2:#22d3ee}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -10%,#252044 0,#090b12 42%);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+.wrap{width:min(1100px,100%);margin:auto;padding:18px 16px 40px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}.brand{font-size:23px;font-weight:800}.brand span{color:#a78bfa}.status{font-size:12px;color:var(--muted);border:1px solid var(--line);padding:8px 10px;border-radius:999px}
+h1{font-size:clamp(30px,7vw,52px);line-height:1.02;margin:18px 0 10px;letter-spacing:-1.5px}.lead{color:var(--muted);font-size:15px;margin-bottom:24px}
+.tabs{display:flex;gap:8px;margin-bottom:14px}.tab{flex:1;border:1px solid var(--line);background:#0e1220;color:var(--muted);padding:13px;border-radius:13px;font-weight:700}.tab.active{background:#1a1530;color:white;border-color:#6d4bd8}
+.card{background:rgba(17,21,34,.9);border:1px solid var(--line);border-radius:18px;padding:15px;margin-bottom:14px;box-shadow:0 15px 45px #0003}
+textarea,select{width:100%;background:#0b0e17;color:var(--text);border:1px solid var(--line);border-radius:13px;padding:13px;font:inherit}textarea{min-height:135px;resize:vertical}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}.field label{display:block;color:var(--muted);font-size:12px;margin:0 0 6px}
+button{border:0;border-radius:13px;padding:14px 16px;font:inherit;font-weight:800;cursor:pointer}.generate{width:100%;margin-top:12px;background:linear-gradient(90deg,var(--accent),#6366f1);color:#fff}.generate:disabled{opacity:.55}
+.result{min-height:180px;display:grid;place-items:center;border:1px dashed #30374d;border-radius:14px;overflow:hidden;background:#0b0e17}.result img,.result video{display:block;width:100%;height:auto;max-height:650px;object-fit:contain}.placeholder{padding:30px;text-align:center;color:var(--muted)}.error{color:#fda4af}.small{font-size:12px;color:var(--muted);margin-top:9px}.download{display:none;margin-top:10px;background:#20283a;color:white;width:100%}
+@media(min-width:760px){.grid{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><div class="brand">Nova <span>AI Studio</span></div><div id="status" class="status">Проверка API…</div></div>
+  <h1>Создавай изображения<br>и видео с AI</h1>
+  <div class="lead">Минималистичная студия генерации. API-ключ хранится на сервере.</div>
+
+  <div class="tabs">
+    <button class="tab active" data-mode="image">Изображение</button>
+    <button class="tab" data-mode="video">Видео</button>
+  </div>
+
+  <section class="card">
+    <textarea id="prompt" placeholder="Опиши сцену… Например: кинематографичный ночной город после дождя, неон, отражения, реалистичная фотография"></textarea>
+    <div class="grid">
+      <div class="field"><label>Модель</label><select id="model"></select></div>
+      <div class="field"><label>Формат</label><select id="ratio"><option>1:1</option><option>16:9</option><option>9:16</option><option>4:3</option><option>3:4</option></select></div>
+      <div class="field"><label>Разрешение</label><select id="resolution"><option value="1024">1024</option><option value="1536">1536</option><option value="2048">2048</option></select></div>
+      <div class="field" id="durationWrap" style="display:none"><label>Длительность</label><select id="duration"><option value="5">5 сек</option><option value="10">10 сек</option></select></div>
+    </div>
+    <button id="generate" class="generate">Создать</button>
+    <div id="hint" class="small"></div>
+  </section>
+
+  <section class="card">
+    <div id="result" class="result"><div class="placeholder">Здесь появится результат</div></div>
+    <button id="download" class="download">Сохранить результат</button>
+  </section>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let mode="image", lastUrl="", pollTimer=null;
+const imageModels=["gpt-image-2.5-flare"];
+const videoModels=["wan-3-0"];
+
+function setup(){
+  $("model").innerHTML=(mode==="image"?imageModels:videoModels).map(x=>`<option>${x}</option>`).join("");
+  $("durationWrap").style.display=mode==="video"?"block":"none";
+  $("resolution").innerHTML=mode==="image"
+    ? `<option value="1024">1024</option><option value="1536">1536</option><option value="2048">2048</option>`
+    : `<option value="720p">720p</option><option value="1080p">1080p</option>`;
+}
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active"); mode=b.dataset.mode; setup();
+});
+async function config(){
+  try{const r=await fetch("/api/config");const d=await r.json();$("status").textContent=d.configured?"API подключён":"Нужен API-ключ";}catch{$("status").textContent="Сервер недоступен";}
+}
+$("generate").onclick=async()=>{
+  const prompt=$("prompt").value.trim();
+  if(!prompt){$("hint").textContent="Напиши описание сцены.";return}
+  if(pollTimer)clearTimeout(pollTimer);
+  $("generate").disabled=true;$("generate").textContent="Генерация…";$("download").style.display="none";
+  $("result").innerHTML='<div class="placeholder">Создаём результат…</div>';
+  try{
+    const body={prompt,model:$("model").value,aspect_ratio:$("ratio").value,resolution:$("resolution").value};
+    if(mode==="video")body.duration=Number($("duration").value);
+    const r=await fetch(`/api/generate/${mode}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d=await r.json();if(!r.ok)throw new Error(d.error||"Ошибка генерации");
+    if(mode==="image"){
+      const url=d?.data?.[0]?.url||d?.output?.[0]?.url||d?.url||d?.image?.url;
+      if(!url)throw new Error("API не вернул ссылку на изображение");
+      show(url,"image");
+    }else{
+      const id=d?.id||d?.data?.id||d?.generation_id;
+      const url=d?.url||d?.video?.url||d?.data?.[0]?.url;
+      if(url)show(url,"video"); else if(id)pollVideo(id); else throw new Error("API не вернул ID видео");
+    }
+  }catch(e){$("result").innerHTML=`<div class="placeholder error">${escapeHtml(e.message)}</div>`}
+  finally{if(mode==="image"||$("result").querySelector("img,video")){$("generate").disabled=false;$("generate").textContent="Создать"}}
+};
+async function pollVideo(id){
+  try{
+    const r=await fetch(`/api/generate/video/${encodeURIComponent(id)}`),d=await r.json();
+    const url=d?.url||d?.video?.url||d?.data?.url||d?.data?.[0]?.url;
+    const status=String(d?.status||d?.state||"").toLowerCase();
+    if(url){show(url,"video");return}
+    if(["failed","error","cancelled"].includes(status))throw new Error(d?.error||"Генерация видео завершилась ошибкой");
+    $("result").innerHTML=`<div class="placeholder">Видео создаётся… ${status||""}</div>`;
+    pollTimer=setTimeout(()=>pollVideo(id),3000);
+  }catch(e){$("result").innerHTML=`<div class="placeholder error">${escapeHtml(e.message)}</div>`}
+  finally{if($("result").querySelector("video")){$("generate").disabled=false;$("generate").textContent="Создать"}}
+}
+function show(url,type){
+  lastUrl=url;
+  $("result").innerHTML=type==="image"?`<img src="${url}" alt="Generated image">`:`<video src="${url}" controls playsinline></video>`;
+  $("download").style.display="block";$("generate").disabled=false;$("generate").textContent="Создать";
+}
+$("download").onclick=()=>{if(lastUrl){const a=document.createElement("a");a.href=lastUrl;a.target="_blank";a.rel="noopener";a.click()}};
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
+setup();config();
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+NOVA AI STUDIO — УСТАНОВКА С IPHONE
+
+Самый простой вариант — GitHub + Render. Node.js прямо на iPhone для этого проекта не нужен.
+
+1. Распакуй ZIP в приложении «Файлы».
+2. Создай новый репозиторий на GitHub.
+3. Загрузи в репозиторий содержимое папки Nova-AI-Studio-iPhone.
+4. НЕ загружай настоящий API-ключ в GitHub.
+5. Открой Render и создай New → Web Service.
+6. Подключи свой GitHub-репозиторий.
+7. Build Command: npm install
+8. Start Command: npm start
+9. В Environment Variables добавь:
+   GETIMG_API_KEY = твой ключ getimg.ai
+10. Нажми Deploy.
+11. После завершения открой выданный Render URL в Safari.
+
+ВАЖНО:
+- ENV.txt — это только шаблон.
+- Не публикуй настоящий GETIMG_API_KEY.
+- «Без искусственных лимитов» означает, что в интерфейсе Nova нет специально добавленного лимита генераций. Ограничения, стоимость и rate limits самого API getimg.ai сохраняются.
+- Если генерация не работает, сначала проверь GETIMG_API_KEY в Render → Environment.
+
+ЕСЛИ GITHUB С IPHONE:
+В Safari открой GitHub, создай репозиторий, затем Add file → Upload files и выбери файлы из распакованной папки.
